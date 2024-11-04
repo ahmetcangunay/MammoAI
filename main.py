@@ -6,7 +6,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap, QPalette, QColor
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QFileDialog,
-                             QCheckBox, QGroupBox, QMessageBox, QScrollArea)
+                             QCheckBox, QGroupBox, QMessageBox, QScrollArea,
+                             QTextEdit)
 import pydicom
 from report_creator import ReportCreator
 from birads_classifier import BiradsClassifier
@@ -125,21 +126,34 @@ class MainWindow(QMainWindow):
         checkbox_group.setLayout(checkbox_layout)
         right_layout.addWidget(checkbox_group)
 
-        # Run and Report buttons
+        # Run and Save Report buttons
         self.run_button = QPushButton("Run Analysis")
         self.run_button.setMinimumHeight(40)
         self.run_button.clicked.connect(self.run_analysis)
         self.run_button.setEnabled(False)
 
-        self.report_button = QPushButton("Generate Report")
-        self.report_button.setMinimumHeight(40)
-        self.report_button.clicked.connect(self.generate_report)
-        self.report_button.setEnabled(False)
+        self.save_report_button = QPushButton("Save Report")
+        self.save_report_button.setMinimumHeight(40)
+        self.save_report_button.clicked.connect(self.save_report)
+        self.save_report_button.setEnabled(False)
 
         right_layout.addWidget(self.run_button)
-        right_layout.addWidget(self.report_button)
+        right_layout.addWidget(self.save_report_button)
 
-        # Add stretch to push buttons to top
+        # Report display area
+        self.report_display = QTextEdit()
+        self.report_display.setReadOnly(True)
+        self.report_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #1e1e1e;
+                color: #ffffff;
+                border: 1px solid #424242;
+                font-size: 12px;
+            }
+        """)
+        right_layout.addWidget(self.report_display)
+
+        # Add stretch to push buttons and report to top
         right_layout.addStretch()
 
         # Add right widget to main layout
@@ -149,6 +163,7 @@ class MainWindow(QMainWindow):
         self.dicom_data = None
         self.image_data = None
         self.analysis_results = {}
+        self.current_report = None  # Store the current report text
 
     def apply_dark_theme(self):
         # Set dark theme palette
@@ -268,9 +283,25 @@ class MainWindow(QMainWindow):
                 self.analysis_results['symmetry'] = SymmetryClassifier.get_symmetry_type(self, image=self.image
                                                                                          )
 
-            # Enable report button if we have results
+            # Generate and display report if we have results
             if self.analysis_results:
-                self.report_button.setEnabled(True)
+                # Create ReportCreator instance
+                report_creator = ReportCreator(self.analysis_results)
+
+                # Get selected analysis types
+                selected_analyses = [
+                    key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
+
+                # Generate report
+                self.current_report = report_creator.generate_report(
+                    self.image_data, selected_analyses)
+
+                # Display report in text edit
+                self.report_display.setPlainText(self.current_report)
+
+                # Enable save report button
+                self.save_report_button.setEnabled(True)
+
                 QMessageBox.information(
                     self, "Success", "Analysis completed successfully")
             else:
@@ -281,32 +312,26 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, "Error", f"Error during analysis: {str(e)}")
 
-    def generate_report(self):
+    def save_report(self):
+        if not self.current_report:
+            QMessageBox.warning(
+                self, "Warning", "No report available. Please run analysis first.")
+            return
+
         try:
-            # Create ReportCreator instance with analysis results
-            report_creator = ReportCreator(self.analysis_results)
-
-            # Get selected analysis types
-            selected_analyses = [
-                key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
-
-            # Generate report with only selected analyses
-            report = report_creator.generate_report(
-                self.image_data, selected_analyses)
-
             # Ask for save location
             file_name, _ = QFileDialog.getSaveFileName(
                 self, "Save Report", "", "Text Files (*.txt)")
 
             if file_name:
                 with open(file_name, 'w', encoding='utf-8') as f:
-                    f.write(report)
+                    f.write(self.current_report)
                 QMessageBox.information(
                     self, "Success", f"Report saved successfully to {file_name}")
 
         except Exception as e:
             QMessageBox.critical(
-                self, "Error", f"Error generating report: {str(e)}")
+                self, "Error", f"Error saving report: {str(e)}")
 
 
 def main():

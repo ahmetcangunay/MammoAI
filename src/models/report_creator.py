@@ -24,7 +24,7 @@ class ReportCreator:
             str: Formatted report text
         """
         # Get current date
-        current_date = time.strftime("%d-%m-%Y")
+        current_date = time.strftime("%d-%m-%Y, %H:%M:%S")
 
         # Start with report header
         report = f"""MAMOGRAFİ RAPORU
